@@ -1,0 +1,4 @@
+ip,organization,country,name,start_address,end_address
+8.8.8.8,GOGL,N/A,GOGL,8.8.8.0,8.8.8.255
+192.168.1.0/24,IANA,N/A,PRIVATE-ADDRESS-CBLK-RFC1918-IANA-RESERVED,192.168.0.0,192.168.255.255
+2001:db8::/32,IANA,N/A,IANA-DOCUMENTATION,2001:db8::,2001:db8:ffff:ffff:ffff:ffff:ffff:ffff

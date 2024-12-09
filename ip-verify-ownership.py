@@ -1,144 +1,129 @@
 import ipaddress
 import requests
-import dns.resolver
-import dns.reversename
-import concurrent.futures
-import time
-from typing import List, Dict
-import csv
-from datetime import datetime
-import argparse
 import sys
+import argparse
+from datetime import datetime
+import csv
+from tqdm import tqdm
 
-class IPOwnershipChecker:
-    def __init__(self, rate_limit: int = 1):
-        """
-        Initialize the checker with rate limiting to respect API limits
-        rate_limit: seconds between API calls
-        """
-        self.rate_limit = rate_limit
-        self.rdap_endpoints = {
-            'ARIN': 'https://rdap.arin.net/registry/ip/',
-            'RIPE': 'https://rdap.db.ripe.net/ip/',
-            'APNIC': 'https://rdap.apnic.net/ip/',
-            'LACNIC': 'https://rdap.lacnic.net/rdap/ip/',
-            'AFRINIC': 'https://rdap.afrinic.net/rdap/ip/'
+def query_rdap(ip):
+    """Query RDAP for IP information"""
+    # Try ARIN first, then get redirect if needed
+    try:
+        response = requests.get(f"https://rdap.arin.net/registry/ip/{ip}", 
+                              headers={'Accept': 'application/rdap+json'},
+                              timeout=10)
+        
+        # Follow redirect if needed
+        if response.status_code == 302:
+            response = requests.get(response.headers['Location'], 
+                                  headers={'Accept': 'application/rdap+json'},
+                                  timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Extract organization name from entities
+            org_name = "N/A"
+            if 'entities' in data and len(data['entities']) > 0:
+                for entity in data['entities']:
+                    if 'roles' in entity and 'registrant' in entity['roles']:
+                        org_name = entity.get('handle', "N/A")
+                        if 'vcardArray' in entity:
+                            for item in entity['vcardArray'][1:]:
+                                if item[0] == 'fn':
+                                    org_name = item[3]
+                                    break
+            
+            return {
+                'organization': org_name,
+                'country': data.get('country', 'N/A'),
+                'name': data.get('name', 'N/A'),
+                'start_address': data.get('startAddress', 'N/A'),
+                'end_address': data.get('endAddress', 'N/A')
+            }
+    except Exception as e:
+        return {
+            'organization': 'Error',
+            'country': 'Error',
+            'name': str(e),
+            'start_address': 'N/A',
+            'end_address': 'N/A'
         }
 
-    def _get_reverse_dns(self, ip: str) -> str:
-        """Get reverse DNS record for an IP"""
+def process_file(input_file, output_file=None):
+    """Process a file of IPs and output results"""
+    if not output_file:
+        output_file = f"ip_ownership_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    results = []
+    
+    try:
+        with open(input_file, 'r') as f:
+            entries = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print(f"Error: File '{input_file}' not found")
+        sys.exit(1)
+    
+    print(f"\nProcessing {len(entries)} entries...")
+    
+    # Process each IP/subnet with progress bar
+    for entry in tqdm(entries, desc="Querying RDAP"):
         try:
-            reverse_name = dns.reversename.from_address(ip)
-            answers = dns.resolver.resolve(reverse_name, "PTR")
-            return str(answers[0])
-        except Exception:
-            return "No reverse DNS record found"
-
-    def _query_rdap(self, ip: str) -> Dict:
-        """Query RDAP servers for IP information"""
-        for registry, endpoint in self.rdap_endpoints.items():
-            try:
-                response = requests.get(f"{endpoint}{ip}", timeout=5)
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        'registry': registry,
-                        'name': data.get('name', 'N/A'),
-                        'organization': data.get('entities', [{}])[0].get('vcardArray', [[]])[1].get('org', 'N/A'),
-                        'country': data.get('country', 'N/A'),
-                        'start_address': data.get('startAddress', 'N/A'),
-                        'end_address': data.get('endAddress', 'N/A')
-                    }
-            except Exception:
-                continue
-            time.sleep(self.rate_limit)
-        return {'registry': 'Unknown', 'name': 'N/A', 'organization': 'N/A', 'country': 'N/A'}
-
-    def process_ip(self, ip: str) -> Dict:
-        """Process a single IP address"""
-        try:
-            rdap_info = self._query_rdap(ip)
-            reverse_dns = self._get_reverse_dns(ip)
-            return {
-                'ip': ip,
-                'reverse_dns': reverse_dns,
-                **rdap_info
-            }
-        except Exception as e:
-            return {
-                'ip': ip,
-                'error': str(e)
-            }
-
-    def process_file(self, input_file: str, output_file: str = None) -> List[Dict]:
-        """
-        Process a file containing IPs and subnets
-        input_file: path to file with one IP/subnet per line
-        output_file: optional CSV output file path
-        """
-        results = []
-        
-        if not output_file:
-            output_file = f"ip_ownership_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-
-        try:
-            with open(input_file, 'r') as f:
-                entries = f.read().splitlines()
-        except FileNotFoundError:
-            print(f"Error: File '{input_file}' not found")
-            sys.exit(1)
-        except Exception as e:
-            print(f"Error reading file: {str(e)}")
-            sys.exit(1)
-
-        # Process each entry (IP or subnet)
-        for entry in entries:
-            try:
-                # Handle both individual IPs and subnets
-                network = ipaddress.ip_network(entry.strip(), strict=False)
-                if network.num_addresses == 1:
-                    result = self.process_ip(str(network.network_address))
-                    results.append(result)
-                else:
-                    # For subnets, process first and last IP
-                    first_ip = self.process_ip(str(network.network_address))
-                    last_ip = self.process_ip(str(network[-1]))
-                    results.extend([first_ip, last_ip])
-            except Exception as e:
+            # Handle both individual IPs and subnets
+            network = ipaddress.ip_network(entry, strict=False)
+            
+            # For single IPs
+            if network.num_addresses == 1:
+                info = query_rdap(str(network.network_address))
                 results.append({
-                    'ip': entry,
-                    'error': f"Invalid IP/subnet format: {str(e)}"
+                    'ip': str(network.network_address),
+                    **info
                 })
-            time.sleep(self.rate_limit)
-
-        # Write results to CSV
-        if results:
-            fieldnames = results[0].keys()
-            with open(output_file, 'w', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(results)
-            print(f"\nResults saved to: {output_file}")
-
-        return results
+            # For subnets, just query first IP
+            else:
+                info = query_rdap(str(network.network_address))
+                results.append({
+                    'ip': f"{network.network_address}/{network.prefixlen}",
+                    **info
+                })
+                
+        except Exception as e:
+            results.append({
+                'ip': entry,
+                'organization': 'Error',
+                'country': 'Error',
+                'name': f"Invalid IP/subnet: {str(e)}",
+                'start_address': 'N/A',
+                'end_address': 'N/A'
+            })
+    
+    # Write results to CSV
+    if results:
+        fieldnames = ['ip', 'organization', 'country', 'name', 'start_address', 'end_address']
+        with open(output_file, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(results)
+        
+        print(f"\nResults saved to: {output_file}")
+        
+        # Print summary to console
+        print("\nSummary of results:")
+        for result in results:
+            print(f"\n{result['ip']}:")
+            print(f"  Organization: {result['organization']}")
+            print(f"  Country: {result['country']}")
+            if result['name'] != 'N/A':
+                print(f"  Network Name: {result['name']}")
 
 def main():
     parser = argparse.ArgumentParser(description='Check ownership information for IP addresses and subnets.')
     parser.add_argument('input_file', help='Path to file containing IPs/subnets (one per line)')
     parser.add_argument('-o', '--output', help='Output CSV file path (optional)')
-    parser.add_argument('-r', '--rate-limit', type=int, default=1,
-                      help='Rate limit in seconds between API calls (default: 1)')
     args = parser.parse_args()
-
-    checker = IPOwnershipChecker(rate_limit=args.rate_limit)
-    results = checker.process_file(args.input_file, args.output)
-
-    # Print results
-    for result in results:
-        print(f"\nResults for {result['ip']}:")
-        for key, value in result.items():
-            if key != 'ip':
-                print(f"{key}: {value}")
+    
+    process_file(args.input_file, args.output)
 
 if __name__ == "__main__":
     main()

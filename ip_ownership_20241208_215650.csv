@@ -1,0 +1,17 @@
+ip,organization,country,name,start_address,end_address
+23.249.12.187,CTL-102,N/A,CTL-102,23.249.12.0,23.249.15.255
+23.249.12.187,CTL-102,N/A,CTL-102,23.249.12.0,23.249.15.255
+70.37.164.124,MSFT,N/A,MICROSOFT,70.37.0.0,70.37.191.255
+63.145.99.90,CCL-534,N/A,CENTURYLINK-LEGACY-QWEST-INET-8,63.144.0.0,63.151.255.255
+38.142.29.68,Error,Error,"('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))",N/A,N/A
+63.145.99.91,Error,Error,"('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))",N/A,N/A
+38.142.29.67,PSI,N/A,COGENT-A,38.0.0.0,38.255.255.255
+52.234.215,Error,Error,Invalid IP/subnet: '52.234.215' does not appear to be an IPv4 or IPv6 network,N/A,N/A
+20.188.73.202,MSFT,N/A,MSFT,20.180.0.0,20.191.255.255
+157.55.179.61,MSFT,N/A,MSFT-GFS,157.54.0.0,157.60.255.255
+13.84.32.234,MSFT,N/A,MSFT,13.64.0.0,13.107.255.255
+13.85.182.133,Error,Error,"('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))",N/A,N/A
+70.37.164.124,Error,Error,"('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))",N/A,N/A
+40.74.232.177,MSFT,N/A,MSFT,40.74.0.0,40.125.127.255
+13.84.222.108,MSFT,N/A,MSFT,13.64.0.0,13.107.255.255
+40.124.97.1,MSFT,N/A,MSFT,40.74.0.0,40.125.127.255

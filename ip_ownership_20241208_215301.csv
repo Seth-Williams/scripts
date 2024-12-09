@@ -1,6 +1,0 @@
-ip,reverse_dns,registry,name,organization,country
-8.8.8.8,dns.google.,Unknown,N/A,N/A,N/A
-192.168.1.0,No reverse DNS record found,Unknown,N/A,N/A,N/A
-192.168.1.255,No reverse DNS record found,Unknown,N/A,N/A,N/A
-2001:db8::,No reverse DNS record found,Unknown,N/A,N/A,N/A
-2001:db8:ffff:ffff:ffff:ffff:ffff:ffff,No reverse DNS record found,Unknown,N/A,N/A,N/A
